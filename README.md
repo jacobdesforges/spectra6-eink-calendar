@@ -1,7 +1,7 @@
 ## Project Overview
 
 <p align="center">
-<img src="./assets/calendar_example.bmp" width="66%">
+<img src="./assets/calendar_example.bmp" width="33%">
 </p>
 
 This software stack is designed to accompany my [Seeed EE04 + Spectra 7.3" model on Printables](https://www.printables.com/model/1826495-magnetic-seeed-ee04-spectra-73bw-75-e-ink-case).
