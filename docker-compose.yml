@@ -1,0 +1,23 @@
+services:
+  eink-calendar:
+    build: .
+    container_name: eink_calendar
+    restart: unless-stopped
+    expose:
+      - 8000
+    env_file:
+      - .env
+    environment:
+      - TZ=America/New_York
+    user: "1000:1000"
+    # Keep port uncommented to serve the calendar over HTTP at http://<your-server-ip>:5233/calendar.bmp
+    # Otherwise, in Caddy or similar serve reverse_proxy eink_calendar:8000 over HTTPS to serve it at https://yourdomain.net/calendar.bmp
+    # e.g. https://calendar.yourdomain.net serves the Radicale Web UI, and https://calendar.yourdomain.net/calendar.bmp serves the calendar image
+    ports:
+      - "5233:8000"
+    networks:
+      - caddy-net
+
+networks:
+  caddy-net:
+    external: true
