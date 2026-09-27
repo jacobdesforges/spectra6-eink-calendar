@@ -8,7 +8,7 @@ This software stack is designed to accompany my [Seeed EE04 + Spectra 7.3" model
 
 How it works:
 
-- On my home server, a Python app built into a Dockerfile that pulls events from my family's self-hosted Radicale calendar, plus local weather data for the day, and generates the 800x480 color calendar image as a .bmp. The dithered color squares allow a pretty accurate match for our different color-coded calendars. Handling dithering server-side and generating a pixel-perfect image for the Spectra 6 display vastly simplifies the EE04 code.
+- On my home server, a Python app containerized with Docker that pulls events from my family's self-hosted Radicale calendar, plus local weather data for the day, and generates the 800x480 color calendar image as a .bmp. The dithered color squares allow a pretty accurate match for our different color-coded calendars. Handling dithering server-side and generating a pixel-perfect image for the Spectra 6 display vastly simplifies the EE04 code.
 
 - The .ino sketch on the EE04 fetches the .bmp from the server once per day over HTTP and draws it on the E-Ink display. It also measures the battery voltage and appends this to the fetch request to display a battery percentage in the corner. Finally, the EE04 also receives the number of seconds until its next scheduled daily refresh before anybody wakes up for the day, and goes to deep sleep to conserve battery until then.
 
