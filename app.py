@@ -1,6 +1,8 @@
 import os
 import hashlib
 from datetime import datetime, date, timedelta
+from urllib.parse import unquote
+from zoneinfo import ZoneInfo
 from flask import Flask, send_file, jsonify, request, make_response
 from PIL import Image, ImageDraw, ImageFont
 import caldav
@@ -22,6 +24,17 @@ WEATHER_LATITUDE = float(os.getenv("WEATHER_LATITUDE", "40"))
 WEATHER_LONGITUDE = float(os.getenv("WEATHER_LONGITUDE", "-74"))
 WEATHER_TIMEZONE = os.getenv("WEATHER_TIMEZONE", "America%2FNew_York")
 WEATHER_UNIT = os.getenv("WEATHER_UNIT", "F").upper()
+
+def get_local_tz():
+    tz_name = unquote(WEATHER_TIMEZONE) if WEATHER_TIMEZONE else ""
+    if tz_name:
+        try:
+            return ZoneInfo(tz_name)
+        except Exception as e:
+            print(f"[TZ WARN] Invalid WEATHER_TIMEZONE '{tz_name}', falling back to system local tz: {e}", flush=True)
+    return datetime.now().astimezone().tzinfo
+
+LOCAL_TZ = get_local_tz()
 
 CALENDAR_REFRESH_HOUR = int(os.getenv("CALENDAR_REFRESH_HOUR", "4"))
 CALENDAR_REFRESH_MINUTE = int(os.getenv("CALENDAR_REFRESH_MINUTE", "15"))
@@ -347,28 +360,36 @@ def draw_precip_sparkline(draw, x, y, width, height, hourly_probs):
 
         plot_x += (bar_width + gap)
 
+def to_local_datetime(val):
+    """Convert timezone-aware datetime objects (e.g. UTC from CalDAV expand) to local timezone."""
+    if isinstance(val, datetime) and val.tzinfo is not None:
+        return val.astimezone(LOCAL_TZ)
+    return val
+
 def get_ical_prop(obj, name):
     """Extract property value defensively whether obj is a vobject or icalendar component."""
     vname = name.lower().replace('-', '_')
     # 1. vobject attribute access
     if hasattr(obj, vname):
         attr = getattr(obj, vname)
-        return attr.value if hasattr(attr, 'value') else attr
+        val = attr.value if hasattr(attr, 'value') else attr
+        return to_local_datetime(val)
 
     # 2. vobject contents dictionary
     if hasattr(obj, 'contents') and isinstance(obj.contents, dict):
         items = obj.contents.get(name.lower(), [])
         if items:
             item = items[0]
-            return item.value if hasattr(item, 'value') else item
+            val = item.value if hasattr(item, 'value') else item
+            return to_local_datetime(val)
 
     # 3. icalendar dictionary access
     if hasattr(obj, 'get'):
         val = obj.get(name.upper()) or obj.get(name.lower()) or obj.get(name.title())
         if val is not None:
             if hasattr(val, 'dt'):
-                return val.dt
-            return val
+                return to_local_datetime(val.dt)
+            return to_local_datetime(val)
     return None
 
 def get_ical_prop_list(obj, name):
@@ -378,9 +399,9 @@ def get_ical_prop_list(obj, name):
         for item in obj.contents.get(name.lower(), []):
             val = item.value if hasattr(item, 'value') else item
             if isinstance(val, list):
-                results.extend(val)
+                results.extend(to_local_datetime(v) for v in val)
             else:
-                results.append(val)
+                results.append(to_local_datetime(val))
     elif hasattr(obj, 'get'):
         vals = obj.get(name.upper()) or obj.get(name.lower())
         if vals is not None:
@@ -389,11 +410,12 @@ def get_ical_prop_list(obj, name):
             for v in vals:
                 if hasattr(v, 'dts'):
                     for dt_item in v.dts:
-                        results.append(dt_item.dt if hasattr(dt_item, 'dt') else dt_item)
+                        raw_dt = dt_item.dt if hasattr(dt_item, 'dt') else dt_item
+                        results.append(to_local_datetime(raw_dt))
                 elif hasattr(v, 'dt'):
-                    results.append(v.dt)
+                    results.append(to_local_datetime(v.dt))
                 else:
-                    results.append(v)
+                    results.append(to_local_datetime(v))
     return results
 
 def fetch_calendar_events():
