@@ -22,12 +22,12 @@ CALDAV_PASSWORD = os.getenv("CALDAV_PASSWORD", "")
 
 WEATHER_LATITUDE = float(os.getenv("WEATHER_LATITUDE", "40"))
 WEATHER_LONGITUDE = float(os.getenv("WEATHER_LONGITUDE", "-74"))
-WEATHER_TIMEZONE = os.getenv("WEATHER_TIMEZONE", "America%2FNew_York")
+WEATHER_TIMEZONE = os.getenv("WEATHER_TIMEZONE", "auto")
 WEATHER_UNIT = os.getenv("WEATHER_UNIT", "F").upper()
 
 def get_local_tz():
-    tz_name = unquote(WEATHER_TIMEZONE) if WEATHER_TIMEZONE else ""
-    if tz_name:
+    tz_name = unquote(WEATHER_TIMEZONE).strip() if WEATHER_TIMEZONE else ""
+    if tz_name and tz_name.lower() != "auto":
         try:
             return ZoneInfo(tz_name)
         except Exception as e:
@@ -432,12 +432,14 @@ def fetch_calendar_events():
 
         start_dt = datetime.combine(today, datetime.min.time())
         end_dt = start_dt + timedelta(days=7)
+        search_start = start_dt - timedelta(days=1)
+        search_end = end_dt + timedelta(days=1)
 
         for calendar in calendars:
             try:
                 cal_color = get_calendar_color(calendar) or COLOR_BLACK
 
-                results = calendar.search(start=start_dt, end=end_dt, event=True, expand=True)
+                results = calendar.search(start=search_start, end=search_end, event=True, expand=True)
 
                 # Group VEVENT components across ALL CalDAV result items by UID
                 events_by_uid = {}
@@ -536,24 +538,30 @@ def fetch_calendar_events():
                                         hour_str = dtstart.strftime("%I").lstrip("0") or "12"
                                         ampm_str = "a" if dtstart.strftime("%p") == "AM" else "p"
                                         time_str = f"{hour_str}:{dtstart.strftime('%M')}{ampm_str}"
+                                        sort_key = (1, dtstart.hour, dtstart.minute)
                                     elif curr_date == start_date:
                                         # Multi-day start
                                         hour_str = dtstart.strftime("%I").lstrip("0") or "12"
                                         ampm_str = "a" if dtstart.strftime("%p") == "AM" else "p"
                                         time_str = f"{hour_str}:{dtstart.strftime('%M')}{ampm_str}"
+                                        sort_key = (1, dtstart.hour, dtstart.minute)
                                     elif curr_date == end_date:
                                         # Multi-day end
                                         hour_str = dtend.strftime("%I").lstrip("0") or "12"
                                         ampm_str = "a" if dtend.strftime("%p") == "AM" else "p"
                                         time_str = f" ->{hour_str}:{dtend.strftime('%M')}{ampm_str}"
+                                        sort_key = (1, dtend.hour, dtend.minute)
                                     else:
                                         # Multi-day middle
                                         time_str = "All Day"
+                                        sort_key = (0, 0, 0)
                                 else:
                                     time_str = "All Day"
+                                    sort_key = (0, 0, 0)
 
                                 events_by_day[curr_date].append({
                                     'time': time_str,
+                                    'sort_key': sort_key,
                                     'summary': summary_str,
                                     'color': (cal_color[0], cal_color[1], cal_color[2])
                                 })
@@ -564,7 +572,7 @@ def fetch_calendar_events():
         print(f"Calendar sync error: {e}", flush=True)
 
     for day in events_by_day:
-        events_by_day[day].sort(key=lambda x: (0 if x['time'] == "All Day" else 1, x['time']))
+        events_by_day[day].sort(key=lambda x: (x['sort_key'], x['summary']))
 
     return events_by_day
 
